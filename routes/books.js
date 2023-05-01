@@ -1,19 +1,19 @@
 const { Router } = require("express");
 const router = Router();
-
 const bookDAO = require('../daos/book');
 
 // Create
 router.post("/", async (req, res, next) => {
   const book = req.body;
-  if (!book || JSON.stringify(book) === '{}' ) {
+  if (!book || JSON.stringify(book) === '{}') {
     res.status(400).send('book is required');
   } else {
     try {
       const savedBook = await bookDAO.create(book);
-      res.json(savedBook); 
-    } catch(e) {
-      if (e instanceof bookDAO.BadDataError) {
+      res.json(savedBook);
+    } 
+    catch (e) {
+      if (e instanceof bookDAO.BadDataError || e.message.includes("E11000 duplicate key error collection:") ) {
         res.status(400).send(e.message);
       } else {
         res.status(500).send(e.message);
@@ -22,22 +22,50 @@ router.post("/", async (req, res, next) => {
   }
 });
 
+// Read - books/authors/stats
+router.get("/authors/stats", async (req, res, next) => {
+
+  let {authorInfo } = req.query;
+
+  const stats = await bookDAO.getAllAuthorsStates(authorInfo);
+  if (stats)
+    res.json(stats);
+  else
+    res.sendStatus(404);
+});
+
+// Read - book/search
+router.get("/search", async (req, res, next) => {
+
+  const book = await bookDAO.searchText(req.query.query);
+  if (book)
+    res.json(book);
+  else
+    res.sendStatus(404);
+});
+
+
 // Read - single book
 router.get("/:id", async (req, res, next) => {
+
   const book = await bookDAO.getById(req.params.id);
   if (book) {
+
     res.json(book);
   } else {
     res.sendStatus(404);
-  }
+  } 
 });
 
 // Read - all books
 router.get("/", async (req, res, next) => {
-  let { page, perPage } = req.query;
+   
+  let { page, perPage, authorId } = req.query;
   page = page ? Number(page) : 0;
   perPage = perPage ? Number(perPage) : 10;
-  const books = await bookDAO.getAll(page, perPage);
+
+  const books = await bookDAO.getAll(page, perPage, authorId);
+
   res.json(books);
 });
 

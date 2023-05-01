@@ -4,8 +4,71 @@ const Book = require('../models/book');
 
 module.exports = {};
 
-module.exports.getAll = (page, perPage) => {
-  return Book.find().limit(perPage).skip(perPage*page).lean();
+module.exports.getAll = async (page, perPage, authorId) => {
+
+  if (mongoose.Types.ObjectId.isValid(authorId)) {
+    return await Book.find({ authorId: authorId }).lean();
+  }
+  return await Book.find().limit(perPage).skip(perPage * page).lean();
+}
+
+module.exports.getAllAuthorsStates = async (authorInfo) => {
+
+  if (authorInfo) {
+    return await Book.aggregate([
+      {
+        $group: {
+          _id: '$authorId',
+          averagePageCount: { $avg: '$pageCount' },
+          numBooks: { $sum: 1 },
+          titles: { $push: '$title' }
+        }
+      },
+      {
+        $lookup: {
+          from: 'authors',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'author'
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          authorId: '$_id',
+          averagePageCount: 1,
+          numBooks: 1,
+          titles: 1,
+          author: { $arrayElemAt: ['$author', 0] }
+        }
+      }
+    ]);
+  }
+
+  return await Book.aggregate([
+    {
+      $group: {
+        _id: '$authorId',
+        numBooks: { $sum: 1 },
+        averagePageCount: { $avg: '$pageCount' },
+        titles: { $push: '$title' }
+      }
+    },
+    {
+      $project: {
+        authorId: '$_id', 
+        _id: 0,
+        numBooks: 1,
+        averagePageCount: 1,
+        titles: 1
+      }
+    }
+  ]);
+}
+
+module.exports.searchText = async (searchTerm) => {
+  let result = await Book.find({ $text: { $search: searchTerm } }).lean();
+  return result;
 }
 
 module.exports.getById = (bookId) => {
@@ -36,6 +99,7 @@ module.exports.create = async (bookData) => {
     const created = await Book.create(bookData);
     return created;
   } catch (e) {
+
     if (e.message.includes('validation failed')) {
       throw new BadDataError(e.message);
     }
@@ -43,5 +107,5 @@ module.exports.create = async (bookData) => {
   }
 }
 
-class BadDataError extends Error {};
+class BadDataError extends Error { };
 module.exports.BadDataError = BadDataError;
